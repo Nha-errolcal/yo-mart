@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\RoleResuest;
 use App\Models\Role;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 
@@ -50,9 +51,6 @@ class RoleController extends Controller
                 'data' => $create
             ]);
         } catch (\Exception $e) {
-            Log::error('Failed to create role: ' . $e->getMessage(), [
-                'exception' => $e
-            ]);
             return response()->json([
                 'message' => 'Failed to create role.'
             ], 500);
@@ -121,11 +119,10 @@ class RoleController extends Controller
         try {
             $role = Role::find($id);
 
-            if ($role) {
-                return response()->json([
-                    'message' => 'Role not found'
-                ], 404);
+            if (!$role) {
+                return response()->json(['message' => 'Role not found'], 404);
             }
+
 
             return response()->json([
                 'message' => 'Customer retrieved successfully.',
@@ -143,27 +140,41 @@ class RoleController extends Controller
         }
     }
 
-    protected function newRoleCode()
+    protected function newRoleCode(): ?string
     {
         try {
-            // Get the highest numeric value from the role codes, excluding the 'CH247-' prefix
-            $latestRole = Role::selectRaw('MAX(CAST(SUBSTRING(code, 7) AS UNSIGNED)) as max_code')->first();
+            $prefix = 'YM-';
+            $digits = 3;         // 001,002,003...
 
-            // Determine the next code number
-            $nextCodeNumber = $latestRole->max_code ? $latestRole->max_code + 1 : 1;
+            $max = Role::query()
+                ->where('code', 'like', $prefix . '%')
+                ->selectRaw("MAX(CAST(substring(code from '[0-9]+$') AS integer)) as max_code")
+                ->value('max_code');
 
-            // Generate the new role code
-            $newCode = 'CH247-' . str_pad($nextCodeNumber, 3, '0', STR_PAD_LEFT); // Pad with zeros to make it 3 digits
+            $next = ((int) $max) + 1;
 
-            return $newCode;
-        } catch (\Exception $e) {
-            Log::error('Failed to generate role code: ' . $e->getMessage(), [
-                'exception' => $e
-            ]);
+            return $prefix . str_pad((string) $next, $digits, '0', STR_PAD_LEFT);
+        } catch (\Throwable $e) {
             return null;
         }
     }
 
+
+    public function syncPermissions(Request $request, $roleId)
+    {
+        $data = $request->validate([
+            'permission_ids' => 'required|array',
+            'permission_ids.*' => 'integer|exists:permissions,id',
+        ]);
+
+        $role = Role::findOrFail($roleId);
+        $role->permissions()->sync($data['permission_ids']);
+
+        return response()->json([
+            'message' => 'Permissions assigned to role',
+            'data' => $role->load('permissions')
+        ]);
+    }
 
 
 }

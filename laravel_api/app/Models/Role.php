@@ -16,4 +16,15 @@ class Role extends Model
         'code',
         'create_by',
     ];
+
+    public function user()
+    {
+        return $this->belongsTo(User::class, "role_user", "role_id", "user_id");
+    }
+
+    public function permissions()
+    {
+        return $this->belongsToMany(Permission::class, 'permission_role', 'role_id', 'permission_id');
+
+    }
 }

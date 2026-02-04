@@ -31,6 +31,7 @@ class User extends Authenticatable implements JWTSubject
         ];
     }
 
+    // JWT
     public function getJWTIdentifier()
     {
         return $this->getKey();
@@ -40,9 +41,36 @@ class User extends Authenticatable implements JWTSubject
     {
         return [];
     }
-    public function order()
+
+    // Relations
+    public function roles()
     {
-        return $this->hasMany(Order::class);
+        return $this->belongsToMany(Role::class, 'role_user', 'user_id', 'role_id')
+            ->withTimestamps();
+    }
+
+    /**
+     * Return user's permissions collection (flatten from roles)
+     * NOTE: best used after $user->load('roles.permissions')
+     */
+    public function permissions()
+    {
+        return $this->roles
+            ->flatMap(fn($role) => $role->permissions)
+            ->unique('id')
+            ->values();
+    }
+
+    public function hasRole(string $roleCode): bool
+    {
+        return $this->roles()->where('code', $roleCode)->exists();
+    }
+
+    public function hasPermission(string $permissionCode): bool
+    {
+        return $this->roles()
+            ->whereHas('permissions', fn($q) => $q->where('code', $permissionCode))
+            ->exists();
     }
 
 }
